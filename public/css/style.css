@@ -1,0 +1,253 @@
+@import url('https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&display=swap');
+
+:root {
+    --pink: #ff007f;
+    /* JS sobrescribe --vh con window.innerHeight en px: en iOS Safari
+       100vh incluye la barra de direcciones y recorta el contenido. */
+    --vh: 100vh;
+    /* Relaciones de aspecto reales de los assets */
+    --sobre-ratio: 0.66693;   /* 1686 x 2528 */
+    --flyer-ratio: 0.66667;   /* 1080 x 1620 */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+    width: 100%;
+    height: var(--vh);
+    background: #000;
+    overflow: hidden;
+    font-family: 'Special Elite', ui-monospace, monospace;
+    color: #fff;
+    touch-action: manipulation;          /* sin doble-tap-zoom: botones responden al primer toque */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+}
+
+.fase {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: var(--vh);
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.hidden { display: none !important; }
+
+/* ---------------------------------------------------------------
+   FASE 1 — Sobre (imagen 2:3 recortada tipo "cover")
+   La caja .stage--cover replica object-fit: cover, pero como caja
+   real, para poder anclar el nombre y la leyenda a coordenadas del
+   diseño en vez de a coordenadas de la pantalla.
+   --------------------------------------------------------------- */
+.stage {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.stage--cover {
+    width: max(100vw, calc(var(--vh) * var(--sobre-ratio)));
+    height: max(var(--vh), calc(100vw / var(--sobre-ratio)));
+}
+
+.stage--cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;      /* la caja ya tiene la proporción exacta */
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+#fase1-sobre { cursor: pointer; }
+
+/* El nombre cae justo entre los corchetes impresos del sobre.
+   El tamaño lo calcula el JS para que nombres largos no se desborden. */
+.nombre-invitado {
+    position: absolute;
+    top: 50.1%;
+    left: 50.6%;
+    transform: translate(-50%, -50%) rotate(-1.2deg);
+    max-width: 25.5%;
+    white-space: nowrap;
+    font-family: 'Special Elite', ui-monospace, monospace;
+    color: #16121a;
+    letter-spacing: 0.02em;
+    text-align: center;
+    pointer-events: none;
+}
+
+.toca-para-abrir {
+    position: absolute;
+    top: 74%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: clamp(0.95rem, 4.2vw, 1.4rem);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #fff;
+    text-shadow: 0 0 10px var(--pink), 0 0 22px rgba(255, 0, 127, 0.6), 0 2px 6px #000;
+    animation: pulse 1.6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.toca-para-abrir::before { content: '[ '; color: var(--pink); }
+.toca-para-abrir::after  { content: ' ]'; color: var(--pink); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
+    50%      { opacity: 1;    transform: translateX(-50%) scale(1.04); }
+}
+
+/* ---------------------------------------------------------------
+   FASE 2 — Transición (video 9:16, llena la pantalla)
+   --------------------------------------------------------------- */
+.video-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+.skip {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    right: 14px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+}
+
+/* ---------------------------------------------------------------
+   FASE 3 — Flyer en loop + acciones
+   El flyer es 2:3 y las pantallas son más altas: en vez de recortar
+   el arte (perdería la dirección o el BYOB), se muestra completo,
+   pegado arriba, y los botones ocupan la franja libre de abajo.
+   --------------------------------------------------------------- */
+#fase3-flyer { justify-content: flex-start; }
+
+/* El arte conserva su proporción 2:3 y nunca pasa del alto disponible;
+   lo que sobra abajo es la franja de botones. */
+.flyer-media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1080 / 1620;
+    flex: 0 1 auto;
+    min-height: 0;
+}
+
+.video-contain {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center top;
+    display: block;
+    background: #000;
+}
+
+/* Zona sensible transparente sobre el bloque de la dirección.
+   Sus coordenadas las fija el JS a partir del área real del video. */
+.hotspot {
+    position: absolute;
+    display: block;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 0, 127, 0);
+    animation: hotspot-hint 2.8s ease-in-out infinite;
+}
+
+@keyframes hotspot-hint {
+    0%, 70%, 100% { border-color: rgba(255, 0, 127, 0); box-shadow: none; }
+    85%           { border-color: rgba(255, 0, 127, 0.9); box-shadow: 0 0 18px rgba(255, 0, 127, 0.5); }
+}
+
+/* Ocupa toda la franja libre bajo el flyer y centra los botones en ella,
+   para que no quede un hueco negro entre el arte y las acciones. */
+.flyer-actions {
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    background: linear-gradient(to top, #000 55%, rgba(0, 0, 0, 0));
+}
+
+.btn {
+    width: min(100%, 420px);
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 18px;
+    font-family: 'Special Elite', ui-monospace, monospace;
+    font-size: clamp(1rem, 4.4vw, 1.2rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    color: #fff;
+    background: var(--pink);
+    border: 2px solid #fff;
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 #000;
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.btn:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0 0 0 #000;
+}
+
+.btn-map {
+    background: #111;
+    border-color: var(--pink);
+    color: var(--pink);
+}
+
+.btn:disabled,
+.btn.confirmed {
+    background: #101210;
+    border-color: #00e28a;
+    color: #00e28a;
+    box-shadow: none;
+    transform: none;
+    cursor: default;
+}
+
+.rsvp-msg {
+    min-height: 1em;
+    font-size: 0.8rem;
+    color: #ff8fab;
+    text-align: center;
+}
+
+/* En horizontal no hay franja libre: el arte se limita en altura y los
+   botones se reparten en una sola fila. */
+@media (orientation: landscape) {
+    .flyer-actions { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .btn { width: min(45%, 320px); min-height: 46px; }
+    .rsvp-msg { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toca-para-abrir, .hotspot { animation: none; }
+    .hotspot { border-color: rgba(255, 0, 127, 0.55); }
+}

@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=3010
+      # Dominio público: sin esto los links del dashboard salen con la IP/puerto interno.
+      - BASE_URL=${BASE_URL:-http://localhost:3010}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-itwasneveraphase}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - MAPS_URL=${MAPS_URL:-https://maps.app.goo.gl/cAFySZyVNRTjwFV19}

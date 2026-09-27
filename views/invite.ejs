@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <title>¡Estás invitado, <%= guestName %>!</title>
+
+    <!-- Open Graph para la previsualización en WhatsApp / redes -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Pau's Birthday — <%= guestName %>, it was never a phase.">
+    <meta property="og:description" content="10 de Octubre | 9PM - 2AM | La Huerta Pool Party">
+    <meta property="og:image" content="<%= hostUrl %>/images/flyer-static.jpg">
+    <meta property="og:url" content="<%= hostUrl %>/invite/<%= guestId %>">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="preload" as="image" href="/images/sobre-frente.jpg">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-guest-id="<%= guestId %>" data-rsvp="<%= rsvpStatus %>">
+
+<!-- FASE 1: sobre cerrado -->
+<section id="fase1-sobre" class="fase" role="button" tabindex="0"
+         aria-label="Abrir invitación de <%= guestName %>">
+    <div class="stage stage--cover">
+        <img src="/images/sobre-frente.jpg" alt="Sobre de la invitación">
+        <span id="nombre-invitado" class="nombre-invitado"><%= guestName %></span>
+        <p class="toca-para-abrir">toca para abrir</p>
+    </div>
+</section>
+
+<!-- FASE 2: video de transición (9:16) -->
+<section id="fase2-video" class="fase hidden">
+    <video id="video-transition" class="video-cover" playsinline webkit-playsinline preload="auto">
+        <source src="/videos/transition.mp4" type="video/mp4">
+    </video>
+    <button id="btn-skip" class="skip" type="button">Saltar ›</button>
+</section>
+
+<!-- FASE 3: flyer animado en loop + acciones -->
+<section id="fase3-flyer" class="fase hidden">
+    <div class="flyer-media">
+        <video id="video-flyer" class="video-contain" loop muted playsinline webkit-playsinline preload="auto"
+               poster="/images/flyer-static.jpg">
+            <source src="/videos/flyer-loop.mp4" type="video/mp4">
+        </video>
+        <!-- Zona sensible encima del bloque "LA HUERTA" del flyer -->
+        <a id="hotspot-mapa" class="hotspot" href="<%= mapsUrl %>" target="_blank" rel="noopener"
+           aria-label="Abrir La Huerta en Google Maps"></a>
+    </div>
+
+    <div class="flyer-actions">
+        <a class="btn btn-map" href="<%= mapsUrl %>" target="_blank" rel="noopener">
+            <span aria-hidden="true">📍</span> Cómo llegar
+        </a>
+        <button id="btn-rsvp" class="btn btn-rsvp" type="button">Confirmar asistencia</button>
+        <p id="rsvp-msg" class="rsvp-msg" role="status" aria-live="polite"></p>
+    </div>
+</section>
+
+<script>
+(function () {
+    const body = document.body;
+    const guestId = body.dataset.guestId;
+
+    const fase1 = document.getElementById('fase1-sobre');
+    const fase2 = document.getElementById('fase2-video');
+    const fase3 = document.getElementById('fase3-flyer');
+    const transition = document.getElementById('video-transition');
+    const flyer = document.getElementById('video-flyer');
+    const btnSkip = document.getElementById('btn-skip');
+    const btnRsvp = document.getElementById('btn-rsvp');
+    const rsvpMsg = document.getElementById('rsvp-msg');
+    const hotspot = document.getElementById('hotspot-mapa');
+    const nombre = document.getElementById('nombre-invitado');
+
+    // --- Altura real del viewport (evita el salto por la barra de Safari) ---
+    const setViewportHeight = () => {
+        document.documentElement.style.setProperty('--vh', window.innerHeight + 'px');
+    };
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', setViewportHeight);
+
+    // --- El nombre se encoge hasta caber entre los corchetes del sobre ---
+    function ajustarNombre() {
+        const caja = nombre.parentElement.getBoundingClientRect();
+        if (!caja.width) return;
+        let size = caja.width * 0.075;
+        nombre.style.fontSize = size + 'px';
+        const maxWidth = caja.width * 0.255;
+        let guard = 40;
+        while (nombre.scrollWidth > maxWidth && size > 6 && guard--) {
+            size -= Math.max(0.5, size * 0.06);
+            nombre.style.fontSize = size + 'px';
+        }
+    }
+    ajustarNombre();
+    window.addEventListener('resize', ajustarNombre);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(ajustarNombre);
+
+    // --- Fases ---
+    let abierto = false;
+
+    function abrirSobre() {
+        if (abierto) return;
+        abierto = true;
+
+        fetch('/api/open/' + guestId, { method: 'POST' }).catch(() => {});
+
+        fase1.classList.add('hidden');
+        fase2.classList.remove('hidden');
+
+        // El tap del usuario habilita el audio; si el navegador lo rechaza,
+        // reintentamos en silencio para que el video nunca se quede congelado.
+        transition.play().catch(() => {
+            transition.muted = true;
+            transition.play().catch(mostrarFlyer);
+        });
+    }
+
+    function mostrarFlyer() {
+        if (!fase3.classList.contains('hidden')) return;
+        fase2.classList.add('hidden');
+        fase3.classList.remove('hidden');
+        flyer.play().catch(() => {});
+        requestAnimationFrame(colocarHotspot);
+    }
+
+    fase1.addEventListener('click', abrirSobre);
+    fase1.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSobre(); }
+    });
+    transition.addEventListener('ended', mostrarFlyer);
+    transition.addEventListener('error', mostrarFlyer);
+    btnSkip.addEventListener('click', mostrarFlyer);
+
+    // --- Hotspot alineado al área real del video (object-fit: contain) ---
+    // El bloque "LA HUERTA" ocupa del 52% al 64% de la altura del flyer.
+    const HOTSPOT = { top: 0.520, bottom: 0.645, left: 0.20, right: 0.80 };
+    const FLYER_RATIO = 1080 / 1620;
+
+    function colocarHotspot() {
+        const caja = flyer.getBoundingClientRect();
+        if (!caja.width || !caja.height) return;
+        const alto = Math.min(caja.height, caja.width / FLYER_RATIO);
+        const ancho = alto * FLYER_RATIO;
+        const offsetX = (caja.width - ancho) / 2;
+        const offsetY = 0; // object-position: center top
+
+        hotspot.style.left = (offsetX + ancho * HOTSPOT.left) + 'px';
+        hotspot.style.width = (ancho * (HOTSPOT.right - HOTSPOT.left)) + 'px';
+        hotspot.style.top = (offsetY + alto * HOTSPOT.top) + 'px';
+        hotspot.style.height = (alto * (HOTSPOT.bottom - HOTSPOT.top)) + 'px';
+    }
+    window.addEventListener('resize', colocarHotspot);
+    flyer.addEventListener('loadedmetadata', colocarHotspot);
+
+    // --- RSVP ---
+    function marcarConfirmado() {
+        btnRsvp.textContent = '¡Nos vemos ahí! ✓';
+        btnRsvp.classList.add('confirmed');
+        btnRsvp.disabled = true;
+    }
+
+    if (body.dataset.rsvp === 'confirmed') marcarConfirmado();
+
+    btnRsvp.addEventListener('click', async () => {
+        btnRsvp.disabled = true;
+        rsvpMsg.textContent = '';
+        try {
+            const res = await fetch('/api/rsvp/' + guestId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'confirmed' })
+            });
+            if (!res.ok) throw new Error('rsvp failed');
+            marcarConfirmado();
+        } catch (e) {
+            btnRsvp.disabled = false;
+            rsvpMsg.textContent = 'No se pudo confirmar, intenta de nuevo.';
+        }
+    });
+})();
+</script>
+</body>
+</html>

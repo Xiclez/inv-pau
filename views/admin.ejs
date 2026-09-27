@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Admin - Pau's Bday</title>
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<%
+    const total = guests.length;
+    const confirmed = guests.filter(g => g.rsvp_status === 'confirmed').length;
+    const declined = guests.filter(g => g.rsvp_status === 'declined').length;
+    const opened = guests.filter(g => g.opened_at).length;
+    const statusLabels = { confirmed: 'CONFIRMADO', declined: 'NO VA', pending: 'PENDIENTE' };
+%>
+    <header class="topbar">
+        <h1>Dashboard de Invitaciones</h1>
+        <form action="/admin/logout" method="POST">
+            <button class="ghost" type="submit">Salir</button>
+        </form>
+    </header>
+
+    <p class="session-note">
+        Sesión protegida con JWT. Expira tras <%= sessionMinutes %> minutos de inactividad.
+        <span id="session-timer"></span>
+    </p>
+
+    <% if (insecureDefaults) { %>
+        <p class="warning">
+            Estás usando credenciales por defecto. Define <code>ADMIN_USER</code> y
+            <code>ADMIN_PASSWORD</code> en el entorno antes de publicar el sitio.
+        </p>
+    <% } %>
+
+    <section class="stats">
+        <div class="stat"><span class="stat-value"><%= total %></span><span class="stat-label">Invitados</span></div>
+        <div class="stat"><span class="stat-value"><%= opened %></span><span class="stat-label">Abrieron</span></div>
+        <div class="stat ok"><span class="stat-value"><%= confirmed %></span><span class="stat-label">Confirmados</span></div>
+        <div class="stat bad"><span class="stat-value"><%= declined %></span><span class="stat-label">No van</span></div>
+    </section>
+
+    <section class="card">
+        <h3>Generar nueva invitación</h3>
+        <form class="invite-form" action="/admin/invite" method="POST">
+            <input type="text" name="name" placeholder="Nombre del invitado (Ej: El Dany)" maxlength="60" required>
+            <button type="submit">Generar link</button>
+        </form>
+        <p class="hint">El nombre aparece dentro de los corchetes del sobre.</p>
+    </section>
+
+    <section class="card">
+        <div class="card-head">
+            <h3>Lista de invitados</h3>
+            <a class="ghost-link" href="/admin/export.csv">Exportar CSV</a>
+        </div>
+
+        <% if (total === 0) { %>
+            <p class="hint">Aún no hay invitados generados.</p>
+        <% } else { %>
+            <ul class="guest-list">
+            <% guests.forEach(guest => { %>
+                <li class="guest">
+                    <div class="guest-main">
+                        <span class="guest-name"><%= guest.name %></span>
+                        <span class="badge status-<%= guest.rsvp_status %>"><%= statusLabels[guest.rsvp_status] || guest.rsvp_status.toUpperCase() %></span>
+                    </div>
+
+                    <div class="guest-link">
+                        <input type="text" readonly value="<%= hostUrl %>/invite/<%= guest.id %>"
+                               onfocus="this.select()" aria-label="Link de <%= guest.name %>">
+                        <button type="button" class="ghost"
+                                onclick="copyLink(this, '<%= hostUrl %>/invite/<%= guest.id %>')">Copiar</button>
+                        <a class="ghost-link" href="/invite/<%= guest.id %>" target="_blank" rel="noopener">Ver</a>
+                    </div>
+
+                    <div class="guest-meta">
+                        <span>Abierto: <%= guest.opened_at ? new Date(guest.opened_at).toLocaleString('es-MX') : '—' %></span>
+                        <span>Respondió: <%= guest.responded_at ? new Date(guest.responded_at).toLocaleString('es-MX') : '—' %></span>
+                    </div>
+
+                    <div class="guest-actions">
+                        <form action="/admin/guest/<%= guest.id %>/status" method="POST">
+                            <input type="hidden" name="status" value="confirmed">
+                            <button class="ghost" type="submit">Confirmar</button>
+                        </form>
+                        <form action="/admin/guest/<%= guest.id %>/status" method="POST">
+                            <input type="hidden" name="status" value="pending">
+                            <button class="ghost" type="submit">Reiniciar</button>
+                        </form>
+                        <form action="/admin/guest/<%= guest.id %>/delete" method="POST"
+                              onsubmit="return confirm('¿Borrar a <%= guest.name %>? Su link dejará de funcionar.')">
+                            <button class="ghost danger" type="submit">Borrar</button>
+                        </form>
+                    </div>
+                </li>
+            <% }) %>
+            </ul>
+        <% } %>
+    </section>
+
+    <script>
+        const SESSION_SECONDS = <%= sessionMinutes %> * 60;
+        let remaining = SESSION_SECONDS;
+
+        function copyLink(button, url) {
+            const done = () => {
+                const original = button.textContent;
+                button.textContent = '¡Copiado!';
+                setTimeout(() => { button.textContent = original; }, 1500);
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+            } else {
+                fallbackCopy(url, done);
+            }
+        }
+
+        // navigator.clipboard no existe en http:// fuera de localhost.
+        function fallbackCopy(url, done) {
+            const temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            try { document.execCommand('copy'); done(); } catch (e) { prompt('Copia el link:', url); }
+            document.body.removeChild(temp);
+        }
+
+        const timer = document.getElementById('session-timer');
+        setInterval(() => {
+            remaining -= 1;
+            if (remaining <= 0) { window.location.href = '/admin/login'; return; }
+            const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const seconds = String(remaining % 60).padStart(2, '0');
+            timer.textContent = `(${minutes}:${seconds})`;
+        }, 1000);
+
+        // El servidor solo renueva el token cuando llega una petición, así que la
+        // actividad local dispara un ping (como máximo uno por minuto) y el
+        // contador del cliente se reinicia solo si ese ping fue aceptado.
+        let lastPing = Date.now();
+        let pinging = false;
+
+        async function keepAlive() {
+            if (pinging || Date.now() - lastPing < 60000) return;
+            pinging = true;
+            try {
+                const response = await fetch('/admin/ping', { credentials: 'same-origin' });
+                if (response.ok) {
+                    lastPing = Date.now();
+                    remaining = SESSION_SECONDS;
+                } else {
+                    window.location.href = '/admin/login';
+                }
+            } catch (e) {
+                /* sin red: dejamos que el contador siga bajando */
+            } finally {
+                pinging = false;
+            }
+        }
+
+        ['click', 'keydown', 'touchstart'].forEach(evt =>
+            document.addEventListener(evt, keepAlive, { passive: true })
+        );
+    </script>
+</body>
+</html>
